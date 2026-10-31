@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>overlap.js — line by line, while it runs</title>
+<style>
+  :root {
+    --bg: #1f1d1a; --panel: #2a2622; --panel-line: #3b352f; --fg: #f1ebe2; --muted: #bdb3a6;
+    --accent: #e08a68; --accent-ink: #1f1d1a; --warn: #e6b65c; --btn: #34302a; --btn-line: #4a433b;
+    --serif: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #faf6f0; --panel: #f1ebe2; --panel-line: #ddd3c5; --fg: #2b2723; --muted: #5f564c;
+      --accent: #b8553a; --accent-ink: #faf6f0; --warn: #8a5a12; --btn: #ffffff; --btn-line: #cfc4b4;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 1rem 1rem 3rem; background: var(--bg); color: var(--fg);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { font: 600 1.7rem/1.2 var(--serif); margin: .2rem 0 .1rem; }
+  h2 { font: 600 1.2rem/1.3 var(--serif); margin-top: 2rem; }
+  .hook { color: var(--muted); font-size: 1.05rem; margin-top: .2rem; }
+  .panel { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px; padding: 1rem; }
+  .stage { max-width: 100%; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 8px; background: var(--bg); touch-action: none; }
+  .controls { display: flex; flex-wrap: wrap; gap: .75rem .9rem; align-items: center; margin-top: .9rem; }
+  button { background: var(--btn); color: var(--fg); border: 1px solid var(--btn-line); border-radius: 8px;
+           padding: .45rem .8rem; font: inherit; cursor: pointer; min-height: 40px; }
+  button:hover { border-color: var(--accent); }
+  button.on { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  label.con { display: inline-flex; align-items: center; gap: .45rem; color: var(--muted); font-size: .92rem; }
+  input[type=range] { width: 150px; accent-color: var(--accent); min-height: 40px; }
+  .readout { color: var(--accent); font-variant-numeric: tabular-nums; min-width: 4.5ch; }
+  .predict { border-left: 3px solid var(--warn); padding: .6rem .8rem; border-radius: 0 8px 8px 0; }
+  .try li { margin: .3rem 0; }
+  .ledger { color: var(--muted); font-size: .92rem; width: 100%; }
+  .ledger td { padding: .35rem .8rem .35rem 0; vertical-align: top; }
+  code, .mono { font-family: var(--mono); font-size: .88em; }
+  .mono { white-space: pre; overflow-x: auto; }
+  .stats { display: flex; flex-wrap: wrap; gap: .4rem 1.4rem; margin: .1rem 0 .7rem; }
+  .stat { color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }
+  .stat b { display: block; color: var(--fg); font: 600 1.45rem/1.15 var(--mono); letter-spacing: 0;
+            font-variant-numeric: tabular-nums; }
+  .stat.peak b { color: var(--accent); }
+
+  .split { display: grid; gap: 1rem; }
+  @media (min-width: 760px) { .split { grid-template-columns: 1.05fr .95fr; align-items: start; } }
+  ol.code { list-style: none; margin: 0; padding: .6rem 0; background: var(--panel);
+            border: 1px solid var(--panel-line); border-radius: 12px; overflow-x: auto; }
+  ol.code li { display: flex; align-items: baseline; gap: .7rem; padding: .1rem .8rem .1rem 0;
+               cursor: pointer; border-left: 3px solid transparent; }
+  ol.code li:hover { background: rgba(224,138,104,.08); }
+  ol.code li:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  ol.code .num { color: var(--muted); font: .8rem var(--mono); min-width: 2.2em; text-align: right;
+                 padding-left: .5rem; user-select: none; opacity: .7; }
+  ol.code .src { font: 13.5px/1.7 var(--mono); white-space: pre; }
+  @media (max-width: 520px) { ol.code .src { font-size: 12px; } ol.code .num { min-width: 1.8em; } }
+  ol.code li.act { background: rgba(224,138,104,.16); border-left-color: var(--accent); }
+  ol.code li.sel { background: rgba(230,182,92,.14); border-left-color: var(--warn); }
+  .explain { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 12px;
+             padding: .85rem 1rem; min-height: 9.5rem; }
+  .explain .tag { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .explain .tag b { color: var(--accent); }
+  .explain p { margin: .4rem 0 0; }
+  .plain-row { border-top: 1px solid var(--panel-line); padding: .65rem 0; }
+  .plain-row:first-child { border-top: 0; }
+  .plain-row > code { color: var(--accent); display: block; white-space: pre-wrap; word-break: break-word; }
+  .plain-row p code { color: var(--accent); background: rgba(224,138,104,.12); padding: .05em .3em; border-radius: 4px; }
+  .plain-row p { margin: .3rem 0 0; }
+  .q { border-top: 1px solid var(--panel-line); padding-top: .8rem; margin-top: .8rem; }
+  .q:first-of-type { border-top: 0; margin-top: .4rem; }
+  .q p { margin: .2rem 0; }
+  details summary { cursor: pointer; color: var(--accent); }
+  .foot { color: var(--muted); font-size: .85rem; margin-top: 2rem; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>overlap.js — 14 lines, four jobs at once</h1>
+  <p class="hook">A job starts every <b>10 ms</b>. Each job takes <b>35 ms</b>. How many jobs are running at the same time?</p>
+
+  <section class="predict">
+    <p><strong>Guess before you watch.</strong> What is the highest number of unfinished <code>wrk()</code> calls at one moment?</p>
+    <div class="controls">
+      <button data-guess="1">1 — one at a time</button>
+      <button data-guess="2">2</button>
+      <button data-guess="4">4</button>
+      <button data-guess="35">35 — one per ms</button>
+    </div>
+    <p id="guessOut" aria-live="polite" class="foot" style="margin:.6rem 0 0"></p>
+  </section>
+
+  <section class="panel" style="margin-top:1rem">
+    <div class="stats">
+      <div class="stat">in flight now <b id="sNow">0</b></div>
+      <div class="stat peak">peak so far <b id="sPeak">0</b></div>
+      <div class="stat">started <b id="sStart">0</b></div>
+      <div class="stat">finished <b id="sEnd">0</b></div>
+      <div class="stat">clock <b id="sClock">0 ms</b></div>
+    </div>
+    <div class="stage"><canvas id="cv" role="img" aria-label="Each row is a job slot. Bars show how long each wrk() call stays alive, with a chart of the in-flight count over time underneath."></canvas></div>
+    <div class="controls">
+      <button id="play" class="on">Play</button>
+      <button id="step">Step to next event</button>
+      <button id="reset">Reset</button>
+      <label class="con">spawn every <input type="range" id="spawn" min="5" max="60" step="5" value="10" aria-label="milliseconds between new jobs"><span class="readout" id="spawnv">10 ms</span></label>
+      <label class="con">job takes <input type="range" id="work" min="5" max="120" step="5" value="35" aria-label="milliseconds each job takes"><span class="readout" id="workv">35 ms</span></label>
+      <label class="con">playback <input type="range" id="speed" min="5" max="100" step="5" value="15" aria-label="playback speed, percent of real time"><span class="readout" id="speedv">0.15×</span></label>
+    </div>
+  </section>
+
+  <h2>The code, and what is happening right now</h2>
+  <div class="split">
+    <ol class="code" id="code"></ol>
+    <div>
+      <div class="explain" id="explain" aria-live="polite"></div>
+      <p class="foot">Tap any line to read it on its own. While the run plays, the highlighted line is the one executing at that instant.</p>
+    </div>
+  </div>
+
+  <h2>Every line, in plain English</h2>
+  <div class="panel" id="plain"></div>
+
+  <h2>Try these three</h2>
+  <ul class="try">
+    <li><b>Job takes 35 ms, spawn every 10 ms</b> → peak is <b>4</b>. New jobs arrive faster than old ones leave, so they pile up — but the pile has a ceiling.</li>
+    <li><b>Job takes 10 ms, spawn every 35 ms</b> → peak drops to <b>1</b>. Each job finishes long before the next one is born; nothing ever overlaps.</li>
+    <li><b>Job takes 100 ms, spawn every 10 ms</b> → peak jumps to <b>10</b>. Same 14 lines of code, ten times the memory held at once. Nothing in the code changed — only the two numbers on lines 9 and 13.</li>
+  </ul>
+
+  <h2>Payoff</h2>
+  <p>Peak overlap ≈ <code>ceil(job time ÷ spawn interval)</code>. With 35 ÷ 10 that is <code>ceil(3.5) = 4</code>. The real file never prints this, which is the quiet lesson: <code>mxRng</code> on line 8 is the only thing measuring it, and it is thrown away. Swap in a slower job and the same code silently holds 10, 20, 100 jobs in memory.</p>
+  <p>A real Node run of an instrumented copy (same numbers) produced:</p>
+  <div class="panel" style="overflow-x:auto"><pre class="mono" style="font-size:.85rem;margin:0;line-height:1.6">t=11   start  → rng 1
+t=21   start  → rng 2
+t=31   start  → rng 3
+t=41   start  → rng 4   ← peak, and it stays here
+t=46   end    → rng 3
+t=52   start  → rng 4   … plateaus at 4
+t=202  clearInterval     no more new jobs
+t=209  end    → rng 2
+t=219  end    → rng 1
+t=229  end    → rng 0   mxRng = 4</pre></div>
+  <p><b>The two traps.</b> First: <code>setInterval</code> counts 10 ms from the <em>clock</em>, never from when the previous job finished — so jobs overlap by design, not by bug. Second: <code>wrk</code> returns a promise that nobody awaits, so errors inside it would never reach your <code>try/catch</code> either.</p>
+
+  <h2>Quick check</h2>
+  <div class="panel">
+    <div class="q">
+      <p><b>1.</b> If line 13 became <code>setInterval(wrk, 5)</code>, and the job still takes 35 ms, what is the new peak?</p>
+      <details><summary>Show answer</summary><p><code>ceil(35 ÷ 5) = 7</code>. Halving the spawn interval roughly doubles the number of jobs alive at once — the plateau is set by the ratio, not by either number alone.</p></details>
+    </div>
+    <div class="q">
+      <p><b>2.</b> Why does <code>rng</code> end at 0 instead of staying at 4?</p>
+      <details><summary>Show answer</summary><p>Every <code>sleep(35)</code> eventually resolves, and each resolution runs one line-10 callback that subtracts 1. Four pluses, four minuses. <code>clearInterval</code> only stops <em>new</em> jobs; the ones already sleeping still finish.</p></details>
+    </div>
+    <div class="q">
+      <p><b>3.</b> What would happen if line 9 had no <code>return</code>?</p>
+      <details><summary>Show answer</summary><p>Nothing visible. <code>setInterval</code> ignores return values either way. The promise would still be created, so the count and the timing would be identical — the return is for humans, not for the timer.</p></details>
+    </div>
+  </div>
+
+  <h2>What's simplified</h2>
+  <table class="ledger">
+    <tr><td>Timers land exactly on multiples of the interval.</td><td>Real Node/browser timers arrive ~1 ms late and browsers clamp nested timers to ≥ 4 ms. Only the picture shifts, not the ratio.</td></tr>
+    <tr><td>The run uses a virtual clock.</td><td>Nothing blocks your page. The real file also blocks nothing — it only schedules work.</td></tr>
+    <tr><td>Each job takes exactly 35 ms every time.</td><td>A real job (network, disk, CPU) has jitter; one slow call can push the peak above 4.</td></tr>
+    <tr><td>Peak/clock numbers come from an instrumented copy of the file.</td><td>The original prints nothing at all, so there is nothing to observe without adding <code>console.log</code>.</td></tr>
+  </table>
+
+  <p class="foot">The file: <code>overlap.js</code> — 14 lines. The point: <em>an async function returns immediately; the work keeps running after it returns.</em></p>
+</main>
+
+<script>
+'use strict';
+
+/* ── the file, as data ─────────────────────────────────────────── */
+const LINES = [
+  { n: 1, src: 'const sleep = (ms) => new Promise(', note: '<code>sleep</code> is an arrow function: give it a number of milliseconds, get back a <em>promise</em> — an IOU meaning "something finishes later". It does not wait here. Lines 2–3 are its body.' },
+  { n: 2, src: '    (r) => setTimeout(r, ms)', note: 'The function passed to <code>new Promise</code> runs <b>immediately</b>. <code>r</code> is short for <em>resolve</em>: the hidden button that flips the promise to "done". <code>setTimeout(r, ms)</code> means "press that button in <code>ms</code> milliseconds".' },
+  { n: 3, src: ');', note: 'Closes <code>new Promise(</code> and ends the statement. The promise object now goes back to whoever called <code>sleep</code>.' },
+  { n: 4, src: '', note: 'An empty line. It exists only to separate the helper from the code that uses it — blank lines never run.' },
+  { n: 5, src: 'let rng = 0, mxRng = 0;', note: 'Two counters. <code>rng</code> = how many <code>wrk()</code> calls are unfinished <em>right now</em>. <code>mxRng</code> = the highest value <code>rng</code> has ever reached, a high-water mark. <code>let</code> means they can be reassigned.' },
+  { n: 6, src: 'function wrk(){', note: 'Declares a named function that takes no arguments. It hands back whatever line 9 returns — a promise.' },
+  { n: 7, src: '    rng++;', note: 'A job has entered: bump the live counter by one. <code>++</code> means "add 1".' },
+  { n: 8, src: '    mxRng = Math.max(mxRng, rng)', note: 'Update the record: keep the larger of the old peak and the current count. This single line is the only measurement of overlap in the whole file. The missing semicolon is legal — JavaScript inserts it.' },
+  { n: 9, src: '    return sleep(35).then(', note: 'Start a 35 ms nap, then attach a follow-up with <code>.then</code>. The <code>return</code> sends that promise back to the caller — which is <code>setInterval</code>, and it throws return values away. So <code>wrk()</code> is finished in microseconds while the nap is still running.' },
+  { n: 10, src: '        () => { rng-- }', note: 'The follow-up. 35 ms later, when the promise is done, this runs and subtracts one: a job just finished. <code>rng--</code> means "minus 1".' },
+  { n: 11, src: '    );', note: 'Closes the <code>.then(...)</code> call and the <code>return</code> statement above it.' },
+  { n: 12, src: '};', note: 'Closes the function body. The extra <code>;</code> after <code>}</code> is an empty statement — harmless, and a very common style.' },
+  { n: 13, src: 'const iv = setInterval(wrk, 10);', note: 'Ask the timer system to call <code>wrk</code> every 10 ms, forever. <code>iv</code> stores the interval\u2019s id so it can be cancelled. The key point: that 10 ms rhythm is fixed. <code>setInterval</code> never checks whether the previous <code>wrk</code> is still sleeping.' },
+  { n: 14, src: 'setTimeout(() => clearInterval(iv), 200);', note: 'A one-shot timer: after 200 ms, run <code>clearInterval(iv)</code> and stop making new jobs. The arrow function still "remembers" <code>iv</code> from the line above (a closure). Jobs already sleeping are untouched — they drain on their own, which is the slow tail at the end.' }
+];
+
+/* ── model ─────────────────────────────────────────────────────── */
+const STOP_AT = 200;                    // line 14: stop spawning at 200 ms
+const cfg = { spawn: 10, work: 35, speed: 0.15 };
+let vt = 0, playing = false, sel = null, S = null, guess = false;
+
+function build() {
+  const tasks = [];
+  for (let t = cfg.spawn; t <= STOP_AT; t += cfg.spawn) tasks.push({ start: t, end: t + cfg.work, lane: 0 });
+  const free = [];                                     // free[lane] = time that lane becomes available
+  for (const tk of tasks) {
+    let l = free.findIndex(f => f <= tk.start);
+    if (l < 0) { l = free.length; free.push(0); }
+    free[l] = tk.end; tk.lane = l;
+  }
+  const ev = [];
+  for (const tk of tasks) { ev.push({ t: tk.start, kind: 'spawn' }); ev.push({ t: tk.end, kind: 'end' }); }
+  ev.push({ t: STOP_AT, kind: 'stop' });
+  ev.sort((a, b) => a.t - b.t || (a.kind === 'end' ? -1 : 1));   // a finish at t precedes a birth at t
+  let r = 0, peak = 0;
+  for (const e of ev) {
+    if (e.kind === 'spawn') { r++; peak = Math.max(peak, r); }
+    else if (e.kind === 'end') { r--; }
+    e.r = r;
+  }
+  S = { tasks, ev, peak, lanes: Math.max(2, free.length), first: tasks.length ? tasks[0].start : 0,
+        end: Math.max(STOP_AT, ...tasks.map(t => t.end)) };
+  S.dur = S.end + 10;
+  return S;
+}
+function stateAt(t) {
+  let r = 0, started = 0, ended = 0, peak = 0, last = null;
+  for (const e of S.ev) {
+    if (e.t > t) break;
+    if (e.kind === 'spawn') { started++; r++; peak = Math.max(peak, r); }
+    else if (e.kind === 'end') { ended++; r--; }
+    last = e;
+  }
+  return { r, started, ended, peak, last };
+}
+const TEND = () => S.end + 4;
+
+/* ── view ──────────────────────────────────────────────────────── */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 800, H = 430, C = {};
+function colors() {
+  const cs = getComputedStyle(document.documentElement);
+  C = { bg: cs.getPropertyValue('--bg').trim(), panel: cs.getPropertyValue('--panel').trim(),
+        line: cs.getPropertyValue('--panel-line').trim(), fg: cs.getPropertyValue('--fg').trim(),
+        muted: cs.getPropertyValue('--muted').trim(), acc: cs.getPropertyValue('--accent').trim(),
+        warn: cs.getPropertyValue('--warn').trim() };
+  return C;
+}
+colors();
+function fit() {
+  if (!S) build();
+  const d = window.devicePixelRatio || 1;
+  W = Math.max(300, cv.parentElement.getBoundingClientRect().width);
+  H = canvasH();
+  cv.style.height = H + 'px';
+  cv.width = Math.round(W * d); cv.height = Math.round(H * d);
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  colors(); render();
+}
+const rowH = () => S.lanes > 12 ? 15 : S.lanes > 8 ? 21 : 30;
+const canvasH = () => 22 + S.lanes * rowH() + 42 + 88 + 20;
+function rr(x, y, w, h, r) {
+  r = Math.min(r, h / 2, Math.max(1, w / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function render() {
+  const st = stateAt(vt);
+  ctx.clearRect(0, 0, W, H);
+  const padL = 58, padR = 10, top = 22;
+  const lanes = S.lanes, rh = rowH(), laneBlock = lanes * rh;
+  const plotW = W - padL - padR;
+  const X = t => padL + (Math.min(t, TEND()) / TEND()) * plotW;
+
+  ctx.font = '11px ' + 'ui-monospace, Menlo, monospace';
+  const narrow = W < 520;
+  ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(narrow ? 'time →   a bar = one living wrk() call'
+                      : 'time →   each row = one job slot, a bar = one living wrk() call', padL, top - 10);
+
+  // lanes
+  for (let l = 0; l < lanes; l++) {
+    const y = top + l * rh;
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y + rh - .5); ctx.lineTo(W - padR, y + rh - .5); ctx.stroke();
+    if (rh >= 15) {
+      ctx.fillStyle = C.muted; ctx.textAlign = 'right';
+      ctx.fillText('slot ' + (l + 1), padL - 6, y + rh / 2);
+      ctx.textAlign = 'left';
+    }
+  }
+  // time grid
+  const stepMs = TEND() > 400 ? 100 : 50;
+  ctx.fillStyle = C.muted; ctx.textAlign = 'center';
+  for (let t = 0; t <= TEND(); t += stepMs) {
+    const x = X(t);
+    ctx.strokeStyle = C.line; ctx.globalAlpha = .55;
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + laneBlock); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillText(t, x, top + laneBlock + 12);
+  }
+  // bars
+  for (const tk of S.tasks) {
+    if (tk.start > vt) continue;
+    const live = vt < tk.end;
+    const x0 = X(tk.start), x1 = X(Math.min(vt, tk.end));
+    const y = top + tk.lane * rh + rh * .22, h = rh * .56;
+    ctx.globalAlpha = live ? 1 : .42;
+    ctx.fillStyle = live ? C.acc : C.fg;
+    rr(x0, y, Math.max(2, x1 - x0), h, 3); ctx.fill();
+    if (live) {                                    // ghost of the remaining nap
+      ctx.globalAlpha = .5; ctx.strokeStyle = C.acc; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+      rr(x0, y, Math.max(2, X(tk.end) - x0), h, 3); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+  }
+  // "now"
+  const nx = X(vt);
+  ctx.strokeStyle = C.warn; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(nx, top - 4); ctx.lineTo(nx, top + laneBlock); ctx.stroke();
+
+  // in-flight chart
+  const y0 = top + laneBlock + 42, y1 = H - 20;
+  const yMax = Math.max(4, S.peak);
+  const Y = v => y1 - (v / yMax) * (y1 - y0);
+  ctx.strokeStyle = C.line;
+  ctx.beginPath(); ctx.moveTo(padL, Y(0)); ctx.lineTo(W - padR, Y(0)); ctx.stroke();
+  ctx.fillStyle = C.muted; ctx.textAlign = 'right';
+  ctx.fillText('0', padL - 6, Y(0)); ctx.fillText(String(yMax), padL - 6, Y(yMax));
+  ctx.textAlign = 'left';
+  ctx.fillText(W < 520 ? 'calls in flight (rng)' : 'calls in flight  (the value of rng)', padL, y0 - 12);
+
+  const pts = [[0, 0]];
+  let r = 0;
+  for (const e of S.ev) {
+    if (e.t > vt) break;
+    pts.push([e.t, r]);
+    r = e.r;
+    pts.push([e.t, r]);
+  }
+  pts.push([vt, r]);
+  ctx.beginPath(); ctx.moveTo(X(pts[0][0]), Y(pts[0][1]));
+  for (const p of pts) ctx.lineTo(X(p[0]), Y(p[1]));
+  ctx.strokeStyle = C.acc; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.lineTo(X(vt), Y(0)); ctx.lineTo(X(0), Y(0)); ctx.closePath();
+  ctx.fillStyle = C.acc; ctx.globalAlpha = .14; ctx.fill(); ctx.globalAlpha = 1;
+
+  if (st.peak > 0) {                                // peak watermark
+    ctx.strokeStyle = C.warn; ctx.setLineDash([4, 4]); ctx.globalAlpha = .8;
+    ctx.beginPath(); ctx.moveTo(padL, Y(st.peak)); ctx.lineTo(X(vt), Y(st.peak)); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.fillStyle = C.warn; ctx.font = '11px ui-monospace, Menlo, monospace';
+    ctx.fillText('peak ' + st.peak, Math.min(X(vt) + 4, W - 56), Y(st.peak) + 12);
+  }
+  if (st.r > 0) {
+    ctx.beginPath(); ctx.arc(X(vt), Y(st.r), 4, 0, 7); ctx.fillStyle = C.acc; ctx.fill();
+  }
+
+  document.getElementById('sNow').textContent = st.r;
+  document.getElementById('sPeak').textContent = st.peak;
+  document.getElementById('sStart').textContent = st.started;
+  document.getElementById('sEnd').textContent = st.ended;
+  document.getElementById('sClock').textContent = Math.round(vt) + ' ms';
+}
+
+/* ── line highlighting ─────────────────────────────────────────── */
+let painted = '', rows = [];
+const PHASE = {
+  idle:  { lines: [13], label: 'Waiting for the first timer tick' },
+  spawn: { lines: [7, 8, 9], label: 'setInterval fires → wrk() runs lines 7–9' },
+  end:   { lines: [10], label: 'A 35 ms sleep resolved → its .then callback runs' },
+  stop:  { lines: [14], label: '200 ms reached → clearInterval stops new jobs' },
+  done:  { lines: [], label: 'Finished — every promise settled' }
+};
+function phase() {
+  if (vt >= TEND()) return PHASE.done;
+  if (vt < S.first) return PHASE.idle;
+  const st = stateAt(vt);
+  if (!st.last) return PHASE.idle;
+  return PHASE[st.last.kind] || PHASE.idle;
+}
+function paint() {
+  const ph = phase(), primary = sel ?? (ph.lines[0] ?? null);
+  for (const li of rows) {
+    const n = +li.dataset.n;
+    li.classList.toggle('act', ph.lines.includes(n) && sel !== n);
+    li.classList.toggle('sel', sel === n);
+  }
+  const key = primary + '|' + (sel != null);
+  if (key === painted) return;
+  painted = key;
+  const box = document.getElementById('explain');
+  if (primary == null) {
+    box.innerHTML = '<span class="tag">Done</span><p>All timers are gone. <code>rng</code> is back to <b>' +
+      stateAt(vt).r + '</b>, exactly as many subtractions as additions. Tap any line to read it.</p>';
+    return;
+  }
+  const L = LINES[primary - 1];
+  box.innerHTML = '<span class="tag">Line ' + L.n + ' — ' +
+    (sel != null ? 'picked by you' : '<b>' + ph.label + '</b>') + '</span>' +
+    '<p><code>' + (L.src.trim() || '(blank)') + '</code></p><p>' + L.note + '</p>';
+}
+
+/* ── code list + plain listing ─────────────────────────────────── */
+const code = document.getElementById('code'), plain = document.getElementById('plain');
+for (const L of LINES) {
+  const li = document.createElement('li');
+  li.dataset.n = L.n; li.tabIndex = 0; li.setAttribute('role', 'button');
+  li.innerHTML = '<span class="num">' + L.n + '</span><span class="src">' +
+    (L.src ? L.src.replace(/&/g, '&amp;').replace(/</g, '&lt;') : ' ') + '</span>';
+  const pick = () => { sel = (sel === L.n ? null : L.n); paint(); };
+  li.addEventListener('click', pick);
+  li.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+  code.appendChild(li);
+
+  const row = document.createElement('div');
+  row.className = 'plain-row';
+  row.innerHTML = '<code>' + (L.n + '  ' + (L.src.trim() || '(blank line)')).replace(/&/g, '&amp;').replace(/</g, '&lt;') +
+                  '</code><p>' + L.note + '</p>';
+  plain.appendChild(row);
+}
+rows = [...document.querySelectorAll('ol.code li')];
+
+/* ── controls ──────────────────────────────────────────────────── */
+const btnPlay = document.getElementById('play');
+function setPlaying(v) {
+  playing = v;
+  btnPlay.textContent = v ? 'Pause' : 'Play';
+  btnPlay.classList.toggle('on', !v);
+  if (v && vt >= TEND()) { vt = 0; }
+}
+btnPlay.addEventListener('click', () => setPlaying(!playing));
+document.getElementById('reset').addEventListener('click', () => { vt = 0; playing = false; setPlaying(false); render(); paint(); });
+document.getElementById('step').addEventListener('click', () => {
+  setPlaying(false);
+  const next = S.ev.map(e => e.t).concat([TEND()]).filter(t => t > vt + 1e-6).sort((a, b) => a - b)[0];
+  vt = Math.min(TEND(), next ?? TEND());
+  render(); paint();
+});
+const bind = (id, key, fmt) => {
+  const el = document.getElementById(id), out = document.getElementById(id + 'v');
+  const upd = () => {
+    const v = +el.value;
+    if (key === 'speed') { cfg.speed = v / 100; }
+    else { cfg[key] = v; build(); vt = 0; setPlaying(false); }
+    out.textContent = fmt(v);
+    if (key === 'speed') { render(); paint(); } else { fit(); paint(); }
+  };
+  el.addEventListener('input', upd); upd();
+};
+bind('spawn', 'spawn', v => v + ' ms');
+bind('work', 'work', v => v + ' ms');
+bind('speed', 'speed', v => (v / 100).toFixed(2) + '×');
+
+for (const b of document.querySelectorAll('[data-guess]')) {
+  b.addEventListener('click', () => {
+    for (const o of document.querySelectorAll('[data-guess]')) o.classList.remove('on');
+    b.classList.add('on');
+    const g = +b.dataset.guess, out = document.getElementById('guessOut');
+    const right = g === S.peak;
+    out.innerHTML = (right ? '<b>' + g + ' — correct.</b> ' : 'You guessed <b>' + g + '</b>. The answer is <b>' + S.peak + '</b>. ') +
+      'Peak = ceil(' + cfg.work + ' ÷ ' + cfg.spawn + ') = ' + S.peak + '. Press Play to watch it climb to that number and stop there.' +
+      (cfg.spawn !== 10 || cfg.work !== 35 ? ' (You have changed the sliders, so the answer changed too.)' : '');
+    if (!guess) { guess = true; }
+  });
+}
+
+/* ── loop ──────────────────────────────────────────────────────── */
+let raf = 0, last = 0;
+function tick(ts) {
+  if (!playing) { raf = 0; return; }
+  if (!last) last = ts;
+  const dt = Math.min(64, ts - last); last = ts;
+  vt = Math.min(TEND(), vt + dt * cfg.speed);
+  if (vt >= TEND()) setPlaying(false);
+  render(); paint();
+  raf = playing ? requestAnimationFrame(tick) : 0;
+}
+function start() { if (!raf) { last = 0; raf = requestAnimationFrame(tick); } }
+btnPlay.addEventListener('click', () => { if (playing) start(); });
+
+window.addEventListener('resize', fit);
+const mq = window.matchMedia('(prefers-color-scheme: light)');
+if (mq.addEventListener) mq.addEventListener('change', () => { colors(); render(); });
+
+build(); fit(); paint();
+</script>
+</body>
+</html>

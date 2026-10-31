@@ -1,0 +1,296 @@
+- main [ref=f1e2]:
+  - heading "overlap.js — 14 lines, four jobs at once" [level=1] [ref=f1e3]
+  - paragraph [ref=f1e4]: A job starts every 10 ms. Each job takes 35 ms. How many jobs are running at the same time?
+  - generic [ref=f1e5]:
+    - paragraph [ref=f1e6]:
+      - strong [ref=f1e7]: Guess before you watch.
+      - text: What is the highest number of unfinished
+      - code [ref=f1e8]: wrk()
+      - text: calls at one moment?
+    - generic [ref=f1e9]:
+      - button "1 — one at a time" [ref=f1e10] [cursor=pointer]
+      - button "2" [ref=f1e11] [cursor=pointer]
+      - button "4" [ref=f1e12] [cursor=pointer]
+      - button "35 — one per ms" [ref=f1e13] [cursor=pointer]
+    - paragraph
+  - generic [ref=f1e14]:
+    - generic [ref=f1e15]:
+      - generic [ref=f1e16]:
+        - text: in flight now
+        - generic [ref=f1e17]: "0"
+      - generic [ref=f1e18]:
+        - text: peak so far
+        - generic [ref=f1e19]: "0"
+      - generic [ref=f1e20]:
+        - text: started
+        - generic [ref=f1e21]: "0"
+      - generic [ref=f1e22]:
+        - text: finished
+        - generic [ref=f1e23]: "0"
+      - generic [ref=f1e24]:
+        - text: clock
+        - generic [ref=f1e25]: 0 ms
+    - img "Each row is a job slot. Bars show how long each wrk() call stays alive, with a chart of the in-flight count over time underneath." [ref=f1e27]
+    - generic [ref=f1e28]:
+      - button "Play" [ref=f1e29] [cursor=pointer]
+      - button "Step to next event" [ref=f1e30] [cursor=pointer]
+      - button "Reset" [ref=f1e31] [cursor=pointer]
+      - generic [ref=f1e32]:
+        - text: spawn every
+        - slider "milliseconds between new jobs" [ref=f1e33]: "10"
+        - generic [ref=f1e34]: 10 ms
+      - generic [ref=f1e35]:
+        - text: job takes
+        - slider "milliseconds each job takes" [ref=f1e36]: "35"
+        - generic [ref=f1e37]: 35 ms
+      - generic [ref=f1e38]:
+        - text: playback
+        - slider "playback speed, percent of real time" [ref=f1e39]: "15"
+        - generic [ref=f1e40]: 0.15×
+  - heading "The code, and what is happening right now" [level=2] [ref=f1e41]
+  - generic [ref=f1e42]:
+    - list [ref=f1e43]:
+      - button "1 const sleep = (ms) => new Promise(" [ref=f1e44] [cursor=pointer]:
+        - generic [ref=f1e45]: "1"
+        - generic [ref=f1e46]: const sleep = (ms) => new Promise(
+      - button "2 (r) => setTimeout(r, ms)" [ref=f1e47] [cursor=pointer]:
+        - generic [ref=f1e48]: "2"
+        - generic [ref=f1e49]: (r) => setTimeout(r, ms)
+      - button "3 );" [ref=f1e50] [cursor=pointer]:
+        - generic [ref=f1e51]: "3"
+        - generic [ref=f1e52]: );
+      - button "4" [ref=f1e53] [cursor=pointer]
+      - button "5 let rng = 0, mxRng = 0;" [ref=f1e56] [cursor=pointer]:
+        - generic [ref=f1e57]: "5"
+        - generic [ref=f1e58]: let rng = 0, mxRng = 0;
+      - 'button "6 function wrk(){" [ref=f1e59] [cursor=pointer]':
+        - generic [ref=f1e60]: "6"
+        - generic [ref=f1e61]: "function wrk(){"
+      - button "7 rng++;" [ref=f1e62] [cursor=pointer]:
+        - generic [ref=f1e63]: "7"
+        - generic [ref=f1e64]: rng++;
+      - button "8 mxRng = Math.max(mxRng, rng)" [ref=f1e65] [cursor=pointer]:
+        - generic [ref=f1e66]: "8"
+        - generic [ref=f1e67]: mxRng = Math.max(mxRng, rng)
+      - button "9 return sleep(35).then(" [ref=f1e68] [cursor=pointer]:
+        - generic [ref=f1e69]: "9"
+        - generic [ref=f1e70]: return sleep(35).then(
+      - 'button "10 () => { rng-- }" [ref=f1e71] [cursor=pointer]':
+        - generic [ref=f1e72]: "10"
+        - generic [ref=f1e73]: "() => { rng-- }"
+      - button "11 );" [ref=f1e74] [cursor=pointer]:
+        - generic [ref=f1e75]: "11"
+        - generic [ref=f1e76]: );
+      - 'button "12 };" [ref=f1e77] [cursor=pointer]':
+        - generic [ref=f1e78]: "12"
+        - generic [ref=f1e79]: "};"
+      - button "13 const iv = setInterval(wrk, 10);" [ref=f1e80] [cursor=pointer]:
+        - generic [ref=f1e81]: "13"
+        - generic [ref=f1e82]: const iv = setInterval(wrk, 10);
+      - button "14 setTimeout(() => clearInterval(iv), 200);" [ref=f1e83] [cursor=pointer]:
+        - generic [ref=f1e84]: "14"
+        - generic [ref=f1e85]: setTimeout(() => clearInterval(iv), 200);
+    - generic [ref=f1e86]:
+      - generic [ref=f1e87]:
+        - generic [ref=f1e88]: Line 13 — Waiting for the first timer tick
+        - paragraph [ref=f1e89]:
+          - code [ref=f1e90]: const iv = setInterval(wrk, 10);
+        - paragraph [ref=f1e91]:
+          - text: Ask the timer system to call
+          - code [ref=f1e92]: wrk
+          - text: every 10 ms, forever.
+          - code [ref=f1e93]: iv
+          - text: "stores the interval’s id so it can be cancelled. The key point: that 10 ms rhythm is fixed."
+          - code [ref=f1e94]: setInterval
+          - text: never checks whether the previous
+          - code [ref=f1e95]: wrk
+          - text: is still sleeping.
+      - paragraph [ref=f1e96]: Tap any line to read it on its own. While the run plays, the highlighted line is the one executing at that instant.
+  - heading "Every line, in plain English" [level=2] [ref=f1e97]
+  - generic [ref=f1e98]:
+    - generic [ref=f1e99]:
+      - code [ref=f1e100]: 1 const sleep = (ms) => new Promise(
+      - paragraph [ref=f1e101]:
+        - code [ref=f1e102]: sleep
+        - text: "is an arrow function: give it a number of milliseconds, get back a"
+        - emphasis [ref=f1e103]: promise
+        - text: — an IOU meaning "something finishes later". It does not wait here. Lines 2–3 are its body.
+    - generic [ref=f1e104]:
+      - code [ref=f1e105]: 2 (r) => setTimeout(r, ms)
+      - paragraph [ref=f1e106]:
+        - text: The function passed to
+        - code [ref=f1e107]: new Promise
+        - text: runs immediately.
+        - code [ref=f1e108]: r
+        - text: is short for
+        - emphasis [ref=f1e109]: resolve
+        - text: ": the hidden button that flips the promise to \"done\"."
+        - code [ref=f1e110]: setTimeout(r, ms)
+        - text: means "press that button in
+        - code [ref=f1e111]: ms
+        - text: milliseconds".
+    - generic [ref=f1e112]:
+      - code [ref=f1e113]: 3 );
+      - paragraph [ref=f1e114]:
+        - text: Closes
+        - code [ref=f1e115]: new Promise(
+        - text: and ends the statement. The promise object now goes back to whoever called
+        - code [ref=f1e116]: sleep
+        - text: .
+    - generic [ref=f1e117]:
+      - code [ref=f1e118]: 4 \u2423
+      - paragraph [ref=f1e119]: An empty line. It exists only to separate the helper from the code that uses it — blank lines never run.
+    - generic [ref=f1e120]:
+      - code [ref=f1e121]: 5 let rng = 0, mxRng = 0;
+      - paragraph [ref=f1e122]:
+        - text: Two counters.
+        - code [ref=f1e123]: rng
+        - text: = how many
+        - code [ref=f1e124]: wrk()
+        - text: calls are unfinished
+        - emphasis [ref=f1e125]: right now
+        - text: .
+        - code [ref=f1e126]: mxRng
+        - text: = the highest value
+        - code [ref=f1e127]: rng
+        - text: has ever reached, a high-water mark.
+        - code [ref=f1e128]: let
+        - text: means they can be reassigned.
+    - generic [ref=f1e129]:
+      - code [ref=f1e130]: "6 function wrk(){"
+      - paragraph [ref=f1e131]: Declares a named function that takes no arguments. It hands back whatever line 9 returns — a promise.
+    - generic [ref=f1e132]:
+      - code [ref=f1e133]: 7 rng++;
+      - paragraph [ref=f1e134]:
+        - text: "A job has entered: bump the live counter by one."
+        - code [ref=f1e135]: ++
+        - text: means "add 1".
+    - generic [ref=f1e136]:
+      - code [ref=f1e137]: 8 mxRng = Math.max(mxRng, rng)
+      - paragraph [ref=f1e138]: "Update the record: keep the larger of the old peak and the current count. This single line is the only measurement of overlap in the whole file. The missing semicolon is legal — JavaScript inserts it."
+    - generic [ref=f1e139]:
+      - code [ref=f1e140]: 9 return sleep(35).then(
+      - paragraph [ref=f1e141]:
+        - text: Start a 35 ms nap, then attach a follow-up with
+        - code [ref=f1e142]: .then
+        - text: . The
+        - code [ref=f1e143]: return
+        - text: sends that promise back to the caller — which is
+        - code [ref=f1e144]: setInterval
+        - text: ", and it throws return values away. So"
+        - code [ref=f1e145]: wrk()
+        - text: is finished in microseconds while the nap is still running.
+    - generic [ref=f1e146]:
+      - code [ref=f1e147]: "10 () => { rng-- }"
+      - paragraph [ref=f1e148]:
+        - text: "The follow-up. 35 ms later, when the promise is done, this runs and subtracts one: a job just finished."
+        - code [ref=f1e149]: rng--
+        - text: means "minus 1".
+    - generic [ref=f1e150]:
+      - code [ref=f1e151]: 11 );
+      - paragraph [ref=f1e152]:
+        - text: Closes the
+        - code [ref=f1e153]: .then(...)
+        - text: call and the
+        - code [ref=f1e154]: return
+        - text: statement above it.
+    - generic [ref=f1e155]:
+      - code [ref=f1e156]: "12 };"
+      - paragraph [ref=f1e157]:
+        - text: Closes the function body. The extra
+        - code [ref=f1e158]: ;
+        - text: after
+        - code [ref=f1e159]: "}"
+        - text: is an empty statement — harmless, and a very common style.
+    - generic [ref=f1e160]:
+      - code [ref=f1e161]: 13 const iv = setInterval(wrk, 10);
+      - paragraph [ref=f1e162]:
+        - text: Ask the timer system to call
+        - code [ref=f1e163]: wrk
+        - text: every 10 ms, forever.
+        - code [ref=f1e164]: iv
+        - text: "stores the interval’s id so it can be cancelled. The key point: that 10 ms rhythm is fixed."
+        - code [ref=f1e165]: setInterval
+        - text: never checks whether the previous
+        - code [ref=f1e166]: wrk
+        - text: is still sleeping.
+    - generic [ref=f1e167]:
+      - code [ref=f1e168]: 14 setTimeout(() => clearInterval(iv), 200);
+      - paragraph [ref=f1e169]:
+        - text: "A one-shot timer: after 200 ms, run"
+        - code [ref=f1e170]: clearInterval(iv)
+        - text: and stop making new jobs. The arrow function still "remembers"
+        - code [ref=f1e171]: iv
+        - text: from the line above (a closure). Jobs already sleeping are untouched — they drain on their own, which is the slow tail at the end.
+  - heading "Try these three" [level=2] [ref=f1e172]
+  - list [ref=f1e173]:
+    - listitem [ref=f1e174]: Job takes 35 ms, spawn every 10 ms → peak is 4. New jobs arrive faster than old ones leave, so they pile up — but the pile has a ceiling.
+    - listitem [ref=f1e175]: Job takes 10 ms, spawn every 35 ms → peak drops to 1. Each job finishes long before the next one is born; nothing ever overlaps.
+    - listitem [ref=f1e176]: Job takes 100 ms, spawn every 10 ms → peak jumps to 10. Same 14 lines of code, ten times the memory held at once. Nothing in the code changed — only the two numbers on lines 9 and 13.
+  - heading "Payoff" [level=2] [ref=f1e177]
+  - paragraph [ref=f1e178]:
+    - text: Peak overlap ≈
+    - code [ref=f1e179]: ceil(job time ÷ spawn interval)
+    - text: . With 35 ÷ 10 that is
+    - code [ref=f1e180]: ceil(3.5) = 4
+    - text: ". The real file never prints this, which is the quiet lesson:"
+    - code [ref=f1e181]: mxRng
+    - text: on line 8 is the only thing measuring it, and it is thrown away. Swap in a slower job and the same code silently holds 10, 20, 100 jobs in memory.
+  - paragraph [ref=f1e182]: "A real Node run of an instrumented copy (same numbers) produced:"
+  - generic [ref=f1e183]: t=11 start in flight 1 t=174 start 4 t=41 start in flight 4 ← peak t=46 end in flight 3 t=202 clearInterval t=209 end 2 t=229 end 0 mxRng = 4
+  - paragraph [ref=f1e184]:
+    - text: "The two traps. First:"
+    - code [ref=f1e185]: setInterval
+    - text: counts 10 ms from the
+    - emphasis [ref=f1e186]: clock
+    - text: ", never from when the previous job finished — so jobs overlap by design, not by bug. Second:"
+    - code [ref=f1e187]: wrk
+    - text: returns a promise that nobody awaits, so errors inside it would never reach your
+    - code [ref=f1e188]: try/catch
+    - text: either.
+  - heading "Quick check" [level=2] [ref=f1e189]
+  - generic [ref=f1e190]:
+    - generic [ref=f1e191]:
+      - paragraph [ref=f1e192]:
+        - text: 1. If line 13 became
+        - code [ref=f1e193]: setInterval(wrk, 5)
+        - text: ", and the job still takes 35 ms, what is the new peak?"
+      - group [ref=f1e194]:
+        - generic "Show answer" [ref=f1e195] [cursor=pointer]
+    - generic [ref=f1e196]:
+      - paragraph [ref=f1e197]:
+        - text: 2. Why does
+        - code [ref=f1e198]: rng
+        - text: end at 0 instead of staying at 4?
+      - group [ref=f1e199]:
+        - generic "Show answer" [ref=f1e200] [cursor=pointer]
+    - generic [ref=f1e201]:
+      - paragraph [ref=f1e202]:
+        - text: 3. What would happen if line 9 had no
+        - code [ref=f1e203]: return
+        - text: "?"
+      - group [ref=f1e204]:
+        - generic "Show answer" [ref=f1e205] [cursor=pointer]
+  - heading "What's simplified" [level=2] [ref=f1e206]
+  - table [ref=f1e207]:
+    - rowgroup [ref=f1e208]:
+      - row [ref=f1e209]:
+        - cell "Timers land exactly on multiples of the interval." [ref=f1e210]
+        - cell "Real Node/browser timers arrive ~1 ms late and browsers clamp nested timers to ≥ 4 ms. Only the picture shifts, not the ratio." [ref=f1e211]
+      - row [ref=f1e212]:
+        - cell "The run uses a virtual clock." [ref=f1e213]
+        - cell "Nothing blocks your page. The real file also blocks nothing — it only schedules work." [ref=f1e214]
+      - row [ref=f1e215]:
+        - cell "Each job takes exactly 35 ms every time." [ref=f1e216]
+        - cell "A real job (network, disk, CPU) has jitter; one slow call can push the peak above 4." [ref=f1e217]
+      - row [ref=f1e218]:
+        - cell "Peak/clock numbers come from an instrumented copy of the file." [ref=f1e219]
+        - cell [ref=f1e220]:
+          - text: The original prints nothing at all, so there is nothing to observe without adding
+          - code [ref=f1e221]: console.log
+          - text: .
+  - paragraph [ref=f1e222]:
+    - text: "The file:"
+    - code [ref=f1e223]: overlap.js
+    - text: "— 14 lines. The point:"
+    - emphasis [ref=f1e224]: an async function returns immediately; the work keeps running after it returns.
